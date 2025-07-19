@@ -1,0 +1,1 @@
+{"flutter":{"platforms":{"android":{"default":{"projectId":"reco-restaurant","appId":"1:860839687206:android:db1139c2afd5ecf67ea2e7","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"reco-restaurant","configurations":{"android":"1:860839687206:android:db1139c2afd5ecf67ea2e7","ios":"1:860839687206:ios:addaf4d597cd52fd7ea2e7"}}}}}}
