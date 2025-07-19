@@ -14,15 +14,37 @@ class FirebaseCartRemoteDataSource implements CartRemoteDataSource {
 
   FirebaseCartRemoteDataSource(this.firestore);
 
+  Future<Map<String, dynamic>> _getCartDocData(String userId) async {
+    final cartDocRef = firestore.collection('cart').doc(userId);
+    final cartDoc = await cartDocRef.get();
+    return cartDoc.exists ? cartDoc.data() ?? {} : {};
+  }
+
+  Map<String, double> _calculateTotals(List<dynamic> items) {
+    double totalPrice = 0.0;
+    double totalItems = 0.0;
+    for (final i in items) {
+      totalPrice += (i['price'] ?? 0.0) * (i['quantity_in_cart'] ?? 0);
+      totalItems += (i['quantity_in_cart'] ?? 0);
+    }
+    return {'totalPrice': totalPrice, 'totalItems': totalItems};
+  }
+
+  Future<void> _updateCartDoc(String userId, List<dynamic> items) async {
+    final totals = _calculateTotals(items);
+    await firestore.collection('cart').doc(userId).set({
+      'items': items,
+      'user_id': userId,
+      'totalPrice': totals['totalPrice'],
+      'totalItems': totals['totalItems'],
+    });
+  }
+
   @override
   Future<void> addItemToCart(ItemModel item, String userId) async {
     try {
-      final cartDocRef = firestore.collection('cart').doc(userId);
-      final cartDoc = await cartDocRef.get();
-      List<dynamic> items = [];
-      if (cartDoc.exists) {
-        items = List.from(cartDoc.data()?['items'] ?? []);
-      }
+      final data = await _getCartDocData(userId);
+      List<dynamic> items = List.from(data['items'] ?? []);
       int index = items.indexWhere((i) => i['id'] == item.id);
       if (index != -1) {
         items[index]['quantity_in_cart'] =
@@ -36,18 +58,7 @@ class FirebaseCartRemoteDataSource implements CartRemoteDataSource {
         };
         items.add(newItem);
       }
-      double totalPrice = 0.0;
-      double totalItems = 0.0;
-      for (final i in items) {
-        totalPrice += (i['price'] ?? 0.0) * (i['quantity_in_cart'] ?? 0);
-        totalItems += (i['quantity_in_cart'] ?? 0);
-      }
-      await cartDocRef.set({
-        'items': items,
-        'user_id': userId,
-        'totalPrice': totalPrice,
-        'totalItems': totalItems,
-      });
+      await _updateCartDoc(userId, items);
     } catch (e) {
       throw Exception('Failed to add item to cart: $e');
     }
@@ -56,10 +67,9 @@ class FirebaseCartRemoteDataSource implements CartRemoteDataSource {
   @override
   Future<void> removeItemFromCart(ItemModel item, String userId) async {
     try {
-      final cartDocRef = firestore.collection('cart').doc(userId);
-      final cartDoc = await cartDocRef.get();
-      if (!cartDoc.exists) return;
-      List<dynamic> items = List.from(cartDoc.data()?['items'] ?? []);
+      final data = await _getCartDocData(userId);
+      if (data.isEmpty) return;
+      List<dynamic> items = List.from(data['items'] ?? []);
       int index = items.indexWhere((i) => i['id'] == item.id);
       if (index != -1) {
         int currentQuantity = items[index]['quantity_in_cart'] ?? 1;
@@ -68,18 +78,7 @@ class FirebaseCartRemoteDataSource implements CartRemoteDataSource {
         } else {
           items[index]['quantity_in_cart'] = currentQuantity - 1;
         }
-        double totalPrice = 0.0;
-        double totalItems = 0.0;
-        for (final i in items) {
-          totalPrice += (i['price'] ?? 0.0) * (i['quantity_in_cart'] ?? 0);
-          totalItems += (i['quantity_in_cart'] ?? 0);
-        }
-        await cartDocRef.set({
-          'items': items,
-          'user_id': userId,
-          'totalPrice': totalPrice,
-          'totalItems': totalItems,
-        });
+        await _updateCartDoc(userId, items);
       }
     } catch (e) {
       throw Exception('Failed to remove item from cart: $e');
@@ -97,17 +96,14 @@ class FirebaseCartRemoteDataSource implements CartRemoteDataSource {
             .map((data) => ItemModel.fromJson(Map<String, dynamic>.from(data)))
             .toList();
       }
-      double totalPrice = 0.0;
-      double totalItems = 0.0;
-      for (final item in cartItems) {
-        totalPrice += item.price * item.quantityInCart;
-        totalItems += item.quantityInCart;
-      }
+      final totals = _calculateTotals(
+        cartItems.map((e) => e.toJson()).toList(),
+      );
       return CartModel(
         userId: userId,
         items: cartItems,
-        totalPrice: totalPrice,
-        totalItems: totalItems,
+        totalPrice: totals['totalPrice']!,
+        totalItems: totals['totalItems']!,
       );
     } catch (e) {
       throw Exception('Failed to get cart: $e');
@@ -117,23 +113,11 @@ class FirebaseCartRemoteDataSource implements CartRemoteDataSource {
   @override
   Future<void> clearItemFromCart(ItemModel item, String userId) async {
     try {
-      final cartDocRef = firestore.collection('cart').doc(userId);
-      final cartDoc = await cartDocRef.get();
-      if (!cartDoc.exists) return;
-      List<dynamic> items = List.from(cartDoc.data()?['items'] ?? []);
+      final data = await _getCartDocData(userId);
+      if (data.isEmpty) return;
+      List<dynamic> items = List.from(data['items'] ?? []);
       items.removeWhere((i) => i['id'] == item.id);
-      double totalPrice = 0.0;
-      double totalItems = 0.0;
-      for (final i in items) {
-        totalPrice += (i['price'] ?? 0.0) * (i['quantity_in_cart'] ?? 0);
-        totalItems += (i['quantity_in_cart'] ?? 0);
-      }
-      await cartDocRef.set({
-        'items': items,
-        'user_id': userId,
-        'totalPrice': totalPrice,
-        'totalItems': totalItems,
-      });
+      await _updateCartDoc(userId, items);
     } catch (e) {
       throw Exception('Failed to clear item from cart: $e');
     }
