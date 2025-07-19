@@ -24,7 +24,7 @@ A Flutter application for restaurant recommendations and food ordering.
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/reco_restaurant.git
+git clone https://github.com/AHMED-FAYEZ7/reco_restaurant.git
 cd reco_restaurant
 ```
 
